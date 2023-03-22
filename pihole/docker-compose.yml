@@ -1,0 +1,75 @@
+version: "3"
+
+# More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+services:
+  pihole:
+    container_name: pihole
+    hostname: pure_pihole
+    image: pihole/pihole:nightly
+    # For DHCP it is recommended to remove these ports and instead add: network_mode: "host"
+  #  ports:
+  #     - "53:53/tcp"
+  #     - "53:53/udp"
+  #     - "67:67/udp" # Only required if you are using Pi-hole as your DHCP server
+  #     - "8097:80/tcp"
+    environment:
+      TZ: 'Asia/Bangkok'
+      # WEBPASSWORD: 'password'
+      FTLCONF_LOCAL_IPV4: '192.168.1.16'
+      WEBTHEME: 'default-auto'
+      SKIPGRAVITYONBOOT: '1'
+      PIHOLE_DNS_: '10.123.0.3#53'
+      DNS_BOGUS_PRIV: true
+      DNS_FQDN_REQUIRED: true
+      QUERY_LOGGING: false
+      DHCP_ACTIVE: false
+      DHCP_START: '192.168.1.201'
+      DHCP_END: '192.168.1.251'
+      DHCP_ROUTER: '192.168.1.1'
+      # INTERFACE: 'wlan0'
+      DNSMASQ_LISTENING: 'single'
+      FTLCONF_MAXDBDAYS: '2'
+      FTLCONF_PIHOLE_PTR: 'NONE'
+    # Volumes store your data between container upgrades
+    volumes:
+      - './etc-pihole:/etc/pihole'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    cap_add:
+      - NET_ADMIN # Required if you are using Pi-hole as your DHCP server, else not needed
+    restart: unless-stopped
+    networks:
+      dockervlan:
+        ipv4_address: 192.168.1.16
+      internalbr:
+        ipv4_address: 10.123.0.2
+  dns:
+    container_name: unbound
+  #      network_mode: host
+  #  ports:
+  #    - '5353:53/tcp'
+  #    - '5353:53/udp'
+    volumes:
+      - './unbound:/etc/unbound/custom.conf.d'
+    image: klutchell/unbound
+    restart: always
+    networks:
+      internalbr:
+        ipv4_address: 10.123.0.3
+
+networks:
+  dockervlan:
+    name: dockervlan
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: "192.168.1.0/24"
+          gateway: "192.168.1.1"
+  internalbr:
+    name: pinet
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.123.0.0/24
